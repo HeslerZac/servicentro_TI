@@ -1,0 +1,17 @@
+# Variables de entorno (contienen contraseñas)
+.env
+.env.*
+
+# Dependencias
+node_modules/
+*/node_modules/
+
+# Builds
+dist/
+*/dist/
+
+# Logs
+*.log
+
+# Docker
+.dockerignore

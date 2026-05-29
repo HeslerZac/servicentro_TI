@@ -1,0 +1,85 @@
+services:
+
+  db:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-app_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASS:-app_pass}
+      POSTGRES_DB: ${DATABASE_NAME:-servicentro_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrator:
+    build: ./servicentro-backend
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USER: ${DATABASE_USER:-app_user}
+      DATABASE_PASS: ${DATABASE_PASS:-app_pass}
+      DATABASE_NAME: ${DATABASE_NAME:-servicentro_db}
+      TYPEORM_SYNC: "true"
+      JWT_SECRETO: ${JWT_SECRETO:-cambia-este-secreto}
+      JWT_EXPIRACION: ${JWT_EXPIRACION:-3600}
+    command: >
+      sh -c "node dist/main.js & sleep 15 && node dist/database/seeds/seed.js && kill %1"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: ./servicentro-backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_PREFIX: /api/v1
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USER: ${DATABASE_USER:-app_user}
+      DATABASE_PASS: ${DATABASE_PASS:-app_pass}
+      DATABASE_NAME: ${DATABASE_NAME:-servicentro_db}
+      TYPEORM_SYNC: false
+      TYPEORM_LOGGING: false
+      JWT_SECRETO: ${JWT_SECRETO:-cambia-este-secreto}
+      JWT_EXPIRACION: ${JWT_EXPIRACION:-3600}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./taller-frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000/api/v1}
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+volumes:
+  pgdata:
+  portainer_data:
